@@ -1,20 +1,23 @@
-# Guía de estudio: biblioteca `garminconnect`
+# Guia de estudio: biblioteca `garminconnect`
 
-Esta guía resume lo aprendido al conectar Python con Garmin Connect, consultar actividades y representar la frecuencia cardiaca con una gráfica.
+Esta guia resume lo aprendido al conectar Python con Garmin Connect, organizar el codigo en modulos, consultar actividades y frecuencia cardiaca, filtrar carreras y preparar visualizaciones.
 
 ## 1. Estructura del proyecto
 
 ```text
 00.Proyecto_Garmin/
-├── .env              # Credenciales locales, no debe compartirse
-├── garmin_utils.py   # Funciones reutilizables para Garmin
-├── test.py           # Script principal de prueba
-└── readme.md         # Esta guía
+|-- .env                  # Credenciales locales, no debe compartirse
+|-- test.py               # Script principal de prueba
+|-- readme.md             # Esta guia
+`-- utils/
+    |-- garmin_utils.py   # Cliente Garmin y consultas de datos
+    |-- data_merger.py    # Filtrado y transformacion de actividades
+    `-- visuals.py        # Graficas
 ```
 
-La idea es separar la lógica reutilizable (`garmin_utils.py`) del archivo que ejecuta el programa (`test.py`).
+La idea es separar la obtencion de datos, la transformacion y la presentacion. `test.py` coordina estas piezas.
 
-## 2. Instalación
+## 2. Instalacion
 
 El proyecto utiliza un entorno virtual. Con el entorno activado, instala las dependencias:
 
@@ -22,7 +25,7 @@ El proyecto utiliza un entorno virtual. Con el entorno activado, instala las dep
 pip install garminconnect python-dotenv matplotlib
 ```
 
-También es recomendable guardar las dependencias:
+Tambien es recomendable guardar las dependencias:
 
 ```powershell
 pip freeze > requirements.txt
@@ -30,14 +33,14 @@ pip freeze > requirements.txt
 
 ## 3. Variables de entorno
 
-El archivo `.env` se encuentra en la raíz del proyecto y contiene los nombres esperados por el código:
+El archivo `.env` se encuentra en la raiz del proyecto y contiene los nombres esperados por el codigo:
 
 ```dotenv
 GARMIN_EMAIL=tu_correo
-GARMIN_PASSWORD=tu_contraseña
+GARMIN_PASSWORD=tu_contrasena
 ```
 
-No se deben escribir las credenciales directamente en el código ni subir `.env` a Git.
+No se deben escribir las credenciales directamente en el codigo ni subir `.env` a Git.
 
 Para leerlas:
 
@@ -53,7 +56,7 @@ password = os.getenv("GARMIN_PASSWORD")
 
 ### Idea importante
 
-`load_dotenv()` carga los valores en las variables de entorno del proceso. No crea automáticamente una variable Python llamada `GARMIN_PASSWORD`.
+`load_dotenv()` carga los valores en las variables de entorno del proceso. No crea automaticamente una variable Python llamada `GARMIN_PASSWORD`.
 
 Por eso esto produce un error:
 
@@ -67,10 +70,10 @@ La forma correcta es utilizar `os.getenv`:
 print(os.getenv("GARMIN_PASSWORD"))
 ```
 
-En un programa real no conviene imprimir una contraseña. Para comprobar si se ha cargado, se puede mostrar únicamente un indicador:
+En un programa real no conviene imprimir una contrasena. Para comprobar si se ha cargado, muestra solo un indicador:
 
 ```python
-print("Contraseña cargada:", os.getenv("GARMIN_PASSWORD") is not None)
+print("Contrasena cargada:", os.getenv("GARMIN_PASSWORD") is not None)
 ```
 
 ## 4. Crear el cliente y autenticarse
@@ -84,20 +87,23 @@ client = Garmin(email, password)
 client.login("~/.garminconnect")
 ```
 
-El objeto `client` representa la conexión con Garmin Connect y se pasa a las funciones que necesitan consultar datos.
+El objeto `client` representa la conexion con Garmin Connect y se pasa a las funciones que necesitan consultar datos.
 
-En este proyecto, `connection_test()` intenta iniciar sesión, muestra si la conexión ha sido correcta y devuelve `True` o `False`:
+En la version actual, `utils/garmin_utils.py` contiene `garmin_client()`. Esta funcion crea el cliente, intenta iniciar sesion y devuelve el objeto conectado:
 
 ```python
-from garmin_utils import connection_test
+from utils.garmin_utils import garmin_client
 
-if connection_test():
-	print("La conexión está lista para consultar datos")
+client = garmin_client()
+if client:
+    print("La conexion esta lista para consultar datos")
 ```
+
+Si el inicio de sesion falla, la funcion imprime el error y devuelve `False`. Centralizar la autenticacion permite reutilizar la misma sesion.
 
 ## 5. Consultar actividades por fechas
 
-La biblioteca permite consultar actividades mediante `get_activities_by_date(start, end)`. Las fechas se envían como texto con formato ISO: `YYYY-MM-DD`.
+La biblioteca permite consultar actividades mediante `get_activities_by_date(start, end)`. Las fechas se envian como texto con formato ISO: `YYYY-MM-DD`.
 
 Ejemplo para el mes actual:
 
@@ -106,38 +112,39 @@ from datetime import date
 
 today = date.today().isoformat()
 first_day = date.today().replace(day=1).isoformat()
-activities = client.get_activities_by_date(first_day, today)
+monthly_activities = client.get_activities_by_date(first_day, today)
 ```
 
-En `garmin_utils.py` se han creado dos funciones:
-
-- `get_monthly_activities()`: devuelve las actividades desde el primer día del mes hasta hoy.
-- `get_weekly_activities()`: devuelve las actividades de los últimos siete días hasta hoy.
-
-Uso desde `test.py`:
+En `utils/garmin_utils.py`, `get_weekly_activities(client)` recibe un cliente ya autenticado y devuelve las actividades de los ultimos siete dias:
 
 ```python
-from garmin_utils import get_monthly_activities, get_weekly_activities
+from utils.garmin_utils import get_weekly_activities
 
-monthly_activities = get_monthly_activities()
-weekly_activities = get_weekly_activities()
-
-print("Actividades del mes:", len(monthly_activities))
+weekly_activities = get_weekly_activities(client)
 print("Actividades de la semana:", len(weekly_activities))
 ```
 
-El resultado es una lista de diccionarios. Para estudiarlo sin perder contexto, es preferible imprimir un resumen con etiquetas y totales antes que imprimir listas sin identificar.
-
-## 6. Consultar la frecuencia cardiaca
-
-Para obtener las pulsaciones de un día se utiliza `get_heart_rates(fecha)`:
+El resultado de `get_activities_by_date` es una lista de diccionarios. Para estudiarlo sin perder contexto, es preferible imprimir un resumen con etiquetas y totales:
 
 ```python
-today = date.today().isoformat()
-heart_rate_data = client.get_heart_rates(today)
+print("\n=== Actividades de los ultimos 7 dias ===")
+print(f"Total de actividades: {len(weekly_activities)}")
+print(weekly_activities)
 ```
 
-La respuesta contiene, entre otros datos, `heartRateValues`. Cada lectura se representa como un par:
+Pasar `client` como argumento evita autenticar una vez por cada consulta.
+
+## 6. Consultar y preparar la frecuencia cardiaca
+
+En `utils/garmin_utils.py`, `get_heart_rate_data(client)` hace la consulta de hoy y devuelve directamente la lista `heartRateValues`:
+
+```python
+from utils.garmin_utils import get_heart_rate_data
+
+readings = get_heart_rate_data(client)
+```
+
+La respuesta original de Garmin contiene, entre otros datos, `heartRateValues`. Cada lectura se representa como un par:
 
 ```python
 [timestamp, heart_rate]
@@ -146,44 +153,42 @@ La respuesta contiene, entre otros datos, `heartRateValues`. Cada lectura se rep
 Algunas respuestas pueden contener valores `None`, por lo que hay que filtrarlos antes de convertirlos o representarlos:
 
 ```python
-readings = heart_rate_data.get("heartRateValues", [])
-
 for timestamp, heart_rate in readings:
-	if timestamp is None or heart_rate is None:
-		continue
-	print(timestamp, heart_rate)
+    if timestamp is None or heart_rate is None:
+        continue
+    print(timestamp, heart_rate)
 ```
 
-## 7. Convertir timestamps y dibujar la gráfica
+## 7. Convertir timestamps y dibujar la grafica
 
-La función `plot_today_heart_rates(garmin_client)` reúne todo el proceso:
+La funcion `plot_today_heart_rates()` de `utils/visuals.py` reune todo el proceso:
 
 1. Calcula la fecha de hoy.
 2. Pide los datos a Garmin.
-3. Extrae `heartRateValues`.
+3. Extrae `heartRateValues` mediante `get_heart_rate_data`.
 4. Descarta lecturas incompletas.
-5. Convierte el timestamp a una fecha y hora.
+5. Convierte el timestamp a fecha y hora.
 6. Dibuja las pulsaciones con Matplotlib.
 7. Devuelve la figura.
 
-Los timestamps pueden llegar en segundos o en milisegundos. La función detecta los valores grandes y divide por `1000` cuando es necesario:
+Los timestamps pueden llegar en segundos o en milisegundos. La conversion para milisegundos es:
 
 ```python
 if timestamp > 10**12:
-	timestamp /= 1000
+    timestamp /= 1000
 ```
 
-La función se utiliza así:
+Uso:
 
 ```python
 import matplotlib.pyplot as plt
-from garmin_utils import plot_today_heart_rates
+from utils.visuals import plot_today_heart_rates
 
-heart_rate_figure = plot_today_heart_rates(client)
+heart_rate_figure = plot_today_heart_rates()
 plt.show()
 ```
 
-La figura también se puede guardar en un archivo:
+La figura tambien se puede guardar:
 
 ```python
 heart_rate_figure.savefig("frecuencia_cardiaca_hoy.png")
@@ -191,29 +196,86 @@ heart_rate_figure.savefig("frecuencia_cardiaca_hoy.png")
 
 La etiqueta `bpm` significa *beats per minute*, es decir, pulsaciones por minuto.
 
-## 8. Flujo completo del programa
+## 8. Filtrar y transformar carreras
 
-El flujo actual de `test.py` es:
+`utils/data_merger.py` convierte la respuesta completa de Garmin en una estructura mas pequena y facil de analizar.
+
+### Filtrar carreras
+
+`parse_weekly_runs(weekly_runs)` recorre las actividades y conserva aquellas cuyo `activityType.typeKey` contiene `running`. Esto incluye carreras normales y carreras en cinta (`treadmill_running`).
 
 ```python
-load_dotenv()
-client = Garmin(os.getenv("GARMIN_EMAIL"), os.getenv("GARMIN_PASSWORD"))
-client.login("~/.garminconnect")
-
-monthly_activities = get_monthly_activities()
-weekly_activities = get_weekly_activities()
-
-heart_rate_figure = plot_today_heart_rates(client)
-plt.show()
+run_type = run.get("activityType", {}).get("typeKey", "")
+if "running" in run_type:
+    # La actividad se transforma en un diccionario resumido
 ```
 
-Observa que `get_monthly_activities()` y `get_weekly_activities()` crean su propio cliente y vuelven a autenticarse, mientras que la gráfica recibe el cliente ya creado como argumento. Una mejora futura sería reutilizar el mismo cliente en todas las funciones para evitar conexiones repetidas.
+El uso de `.get()` evita errores cuando falta una clave:
 
-## 9. Errores habituales
+```python
+name = run.get("activityName", "Carrera")
+distance = run.get("distance", 0)
+average_heart_rate = run.get("averageHR", 0)
+```
+
+### Estructura resumida de una carrera
+
+Cada carrera filtrada conserva estas categorias:
+
+- Identidad: `name`, `date`.
+- Volumen: `distance_meters`, `duration_seconds`.
+- Intensidad: `average_heart_rate`, `training_load`.
+- Dinamica: `cadence`, `stride_length_cm`, `vertical_oscillation_cm`, `vertical_ratio`.
+- Zonas cardiacas: `zone_1`, `zone_2`, `zone_3`, `zone_4`, `zone_5`.
+
+`parse_weekly_activities(client)` combina la consulta semanal con el filtrado y devuelve un diccionario bajo la clave `weekly_runs`:
+
+```python
+{
+    "weekly_runs": [
+        {
+            "name": "Carrera",
+            "distance_meters": 5000,
+            "average_heart_rate": 145
+        }
+    ]
+}
+```
+
+Ejemplo de uso:
+
+```python
+from utils.data_merger import parse_weekly_activities
+
+parsed_data = parse_weekly_activities(client)
+runs = parsed_data["weekly_runs"]
+print("Carreras encontradas:", len(runs))
+```
+
+## 9. Flujo recomendado del programa
+
+El flujo recomendado es autenticar una vez, reutilizar `client`, obtener los datos originales, transformarlos y finalmente visualizarlos:
+
+```python
+import matplotlib.pyplot as plt
+
+from utils.data_merger import parse_weekly_activities
+from utils.garmin_utils import garmin_client, get_weekly_activities
+from utils.visuals import plot_today_heart_rates
+
+client = garmin_client()
+if client:
+    weekly_activities = get_weekly_activities(client)
+    parsed_data = parse_weekly_activities(client)
+    heart_rate_figure = plot_today_heart_rates()
+    plt.show()
+```
+
+## 10. Errores habituales y puntos pendientes
 
 ### `NameError: name 'GARMIN_PASSWORD' is not defined`
 
-Significa que se ha usado el nombre de una variable de entorno como si fuera una variable Python. Solución:
+Significa que se ha usado el nombre de una variable de entorno como si fuera una variable Python. Solucion:
 
 ```python
 password = os.getenv("GARMIN_PASSWORD")
@@ -224,37 +286,66 @@ password = os.getenv("GARMIN_PASSWORD")
 Comprueba que:
 
 - El archivo se llama exactamente `.env`.
-- Está en la carpeta desde la que se ejecuta el programa.
+- Esta en la carpeta desde la que se ejecuta el programa.
 - La clave coincide exactamente con `GARMIN_PASSWORD` o `GARMIN_EMAIL`.
 - No hay espacios innecesarios alrededor del nombre.
 - Se ha ejecutado `load_dotenv()` antes de llamar a `os.getenv`.
 
-### No aparecen puntos en la gráfica
+### No aparecen puntos en la grafica
 
-Puede que Garmin no haya devuelto lecturas para la fecha consultada. La función maneja este caso mostrando un mensaje dentro de la gráfica.
+Puede que Garmin no haya devuelto lecturas para la fecha consultada. La funcion maneja este caso mostrando un mensaje dentro de la grafica.
 
-### No se debe compartir información sensible
+### Import duplicado en `test.py`
 
-Nunca publiques el contenido de `.env`, contraseñas, tokens ni archivos de sesión de Garmin. Si una credencial se expone, debe cambiarse cuanto antes.
+No se debe importar `get_weekly_activities` desde dos sitios. La importacion recomendada es:
 
-## 10. Ejercicios de estudio
+```python
+from utils.garmin_utils import get_weekly_activities
+from utils.data_merger import parse_weekly_activities
+```
 
-1. Modifica la gráfica para mostrar una línea horizontal con la frecuencia cardiaca en reposo.
-2. Añade una función que devuelva el valor máximo y mínimo de pulsaciones del día.
-3. Guarda automáticamente la gráfica con la fecha en el nombre del archivo.
-4. Cambia `get_monthly_activities()` para que reciba una fecha inicial y una fecha final como argumentos.
-5. Reutiliza un único objeto `Garmin` en todas las consultas.
-6. Añade comprobaciones que indiquen claramente si falta `GARMIN_EMAIL` o `GARMIN_PASSWORD`.
+`data_merger.py` utiliza la funcion de consulta, pero no debe reemplazarla con otro nombre.
 
-## Resumen
+### Import de la grafica
+
+`utils/visuals.py` debe importar el modulo desde el paquete del proyecto:
+
+```python
+from utils.garmin_utils import get_heart_rate_data
+```
+
+Asi se evita depender de un `garmin_utils.py` situado en la raiz.
+
+### No se debe compartir informacion sensible
+
+Nunca publiques el contenido de `.env`, contrasenas, tokens ni archivos de sesion de Garmin. Si una credencial se expone, debe cambiarse cuanto antes.
+
+## 11. Ejercicios de estudio
+
+1. Modifica la grafica para mostrar una linea horizontal con la frecuencia cardiaca en reposo.
+2. Anade una funcion que devuelva el valor maximo y minimo de pulsaciones del dia.
+3. Guarda automaticamente la grafica con la fecha en el nombre del archivo.
+4. Cambia la consulta mensual para que reciba una fecha inicial y una fecha final como argumentos.
+5. Reutiliza un unico objeto `Garmin` en todas las consultas.
+6. Anade comprobaciones que indiquen claramente si falta `GARMIN_EMAIL` o `GARMIN_PASSWORD`.
+7. Calcula la distancia total y el tiempo total de las carreras de la semana.
+8. Convierte `distance_meters` a kilometros y `duration_seconds` a minutos.
+9. Crea una grafica del ritmo medio de cada carrera.
+10. Corrige los imports del paquete `utils` y prueba el flujo completo desde `test.py`.
+
+## 12. Resumen
 
 Los conceptos principales aprendidos son:
 
-- Las variables de `.env` se leen con `os.getenv` después de ejecutar `load_dotenv()`.
+- Las variables de `.env` se leen con `os.getenv` despues de ejecutar `load_dotenv()`.
 - `Garmin(email, password)` crea el cliente.
-- `login()` autentica la sesión.
+- `login()` autentica la sesion.
 - Las consultas por fecha utilizan textos con formato `YYYY-MM-DD`.
 - Las actividades se consultan con `get_activities_by_date`.
-- La frecuencia cardiaca se consulta con `get_heart_rates`.
+- `garmin_client()` centraliza la creacion y autenticacion del cliente.
+- `get_weekly_activities(client)` reutiliza una sesion existente.
+- `parse_weekly_runs` filtra carreras mediante `activityType.typeKey`.
+- `parse_weekly_activities` devuelve una estructura resumida bajo la clave `weekly_runs`.
+- `get_heart_rate_data(client)` devuelve las lecturas de hoy.
 - `heartRateValues` contiene pares de timestamp y pulsaciones.
-- Matplotlib permite transformar esos datos en una gráfica.
+- Matplotlib permite transformar esos datos en una grafica.
