@@ -1,348 +1,297 @@
-# Guia de estudio: biblioteca `garminconnect`
+# Proyecto Garmin
 
-Esta guia resume lo aprendido al conectar Python con Garmin Connect, organizar el codigo en modulos, consultar actividades y frecuencia cardiaca, filtrar carreras y preparar visualizaciones.
+Este proyecto conecta tu cuenta de Garmin Connect con Python para:
 
-## 1. Estructura del proyecto
+- consultar actividades recientes,
+- extraer frecuencia cardiaca,
+- filtrar carreras de la semana,
+- preparar un resumen útil para un modelo de IA local con Ollama,
+- y generar una recomendación de entrenamiento basada en tus datos.
+
+La ejecución principal está en `test.py`, que autentica con Garmin, obtiene los datos, los transforma y los envía a un modelo de IA local para que genere un diagnóstico y plan de entrenamiento.
+
+## 1. ¿Qué necesita este proyecto?
+
+Para ejecutarlo desde cero necesitas:
+
+- Python 3.10 o superior
+- Git (opcional, pero recomendado)
+- Una cuenta de Garmin Connect con datos de entrenamiento
+- Ollama instalado en tu equipo
+- Un modelo local descargado, por ejemplo `llama3.2`
+- Un entorno virtual de Python
+
+## 2. Estructura del proyecto
 
 ```text
 00.Proyecto_Garmin/
-|-- .env                  # Credenciales locales, no debe compartirse
-|-- test.py               # Script principal de prueba
-|-- readme.md             # Esta guia
-`-- utils/
-    |-- garmin_utils.py   # Cliente Garmin y consultas de datos
-    |-- data_merger.py    # Filtrado y transformacion de actividades
-    `-- visuals.py        # Graficas
+├── .env                  # Credenciales locales de Garmin (NO subir a Git)
+├── .venv                 # Entorno virtual de Python (puedes crear uno tú)
+├── agents/
+│   └── ollama_agents.py  # Llama al modelo local de Ollama
+├── utils/
+│   ├── garmin_utils.py   # Funciones para autenticación y consultas a Garmin
+│   ├── data_merger.py    # Filtrado y transformación de carreras
+│   └── visuals.py        # Gráficos de frecuencia cardiaca
+├── test.py               # Script principal que ejecuta el flujo completo
+├── requirements.txt      # Dependencias del proyecto
+├── readme.md             # Documentación del proyecto
+└── LICENSE               # Licencia
 ```
 
-La idea es separar la obtencion de datos, la transformacion y la presentacion. `test.py` coordina estas piezas.
+## 3. Requisitos previos
 
-## 2. Instalacion
+### 3.1 Instalar Python
 
-El proyecto utiliza un entorno virtual. Con el entorno activado, instala las dependencias:
+Descarga e instala Python 3.10+ desde:
+
+https://www.python.org/downloads/
+
+Durante la instalación asegúrate de marcar la opción:
+
+- Add Python to PATH
+
+### 3.2 Instalar Ollama
+
+Instala Ollama desde:
+
+https://ollama.com/download
+
+Una vez instalado, descarga el modelo que usa el proyecto:
 
 ```powershell
-pip install garminconnect python-dotenv matplotlib
+ollama pull llama3.2
 ```
 
-Tambien es recomendable guardar las dependencias:
+Y asegúrate de que el servicio de Ollama esté corriendo:
 
 ```powershell
-pip freeze > requirements.txt
+ollama serve
 ```
 
-## 3. Variables de entorno
+> Si vas a usar este proyecto desde Windows, normalmente basta con que Ollama esté instalado y el modelo descargado. El proyecto usa `langchain_ollama` y el nombre por defecto del modelo es `llama3.2`.
 
-El archivo `.env` se encuentra en la raiz del proyecto y contiene los nombres esperados por el codigo:
+## 4. Clonar o abrir el proyecto
+
+Desde una terminal, entra en la carpeta del proyecto. Si lo tienes clonado, por ejemplo:
+
+```powershell
+cd C:\Users\tu_usuario\Documents\Machine Learning\00.Proyecto_Garmin
+```
+
+## 5. Crear el entorno virtual
+
+En Windows:
+
+```powershell
+py -m venv .venv
+```
+
+Activarlo:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+Si PowerShell bloquea scripts, ejecuta esto antes:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Luego repite la activación.
+
+## 6. Instalar dependencias
+
+Con el entorno virtual activado, instala las librerías necesarias:
+
+```powershell
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+Si prefieres instalar las dependencias manualmente, puedes hacerlo con:
+
+```powershell
+pip install garminconnect python-dotenv matplotlib langchain langchain-ollama
+```
+
+## 7. Crear el archivo `.env`
+
+En la raíz del proyecto crea un archivo llamado `.env` con estas variables:
+
+```dotenv
+GARMIN_EMAIL=tu_correo@ejemplo.com
+GARMIN_PASSWORD=tu_contrasena
+```
+
+Ejemplo real:
+
+```dotenv
+GARMIN_EMAIL=juan.perez@gmail.com
+GARMIN_PASSWORD=MiPasswordSecreta123
+```
+
+Importante:
+
+- no compartas este archivo,
+- no lo subas a GitHub,
+- usa tus credenciales reales de Garmin Connect.
+
+El código carga estas variables con `python-dotenv` y `os.getenv()`.
+
+## 8. Verificar que Ollama esté listo
+
+Antes de ejecutar la app, comprueba que el modelo esté disponible:
+
+```powershell
+ollama list
+```
+
+Debe aparecer `llama3.2` o el modelo que hayas descargado.
+
+## 9. Ejecutar el proyecto
+
+Desde la carpeta del proyecto, con el entorno virtual activado:
+
+```powershell
+python test.py
+```
+
+Eso hará lo siguiente:
+
+1. carga las variables del `.env`,
+2. inicia sesión en Garmin Connect,
+3. obtiene actividades recientes,
+4. filtra las carreras de la semana,
+5. consulta la IA local de Ollama,
+6. genera un diagnóstico y plan de entrenamiento.
+
+## 10. ¿Qué hace exactamente `test.py`?
+
+El script principal importa:
+
+- `load_dotenv()` para leer `.env`,
+- `garmin_client()` para autenticarse con Garmin,
+- `parse_weekly_activities()` para limpiar los datos,
+- `chat_Ollama()` para enviar el análisis a Ollama.
+
+Luego hace una llamada como esta:
+
+```python
+weekly_activities = parse_weekly_activities(client)
+print(chat_Ollama(..., modelo="llama3.2"))
+```
+
+Es decir, envía a la IA una descripción de tus carreras de la semana y pide un plan de entrenamiento.
+
+## 11. Solución de problemas comunes
+
+### Error: `GARMIN_PASSWORD` no está definido
+
+Esto sucede porque intentas usar una variable de entorno como si fuera una variable normal de Python. La forma correcta es:
+
+```python
+import os
+password = os.getenv("GARMIN_PASSWORD")
+```
+
+### Error: `Connection failed` o no se conecta a Garmin
+
+Revisa:
+
+- que `GARMIN_EMAIL` y `GARMIN_PASSWORD` sean correctos,
+- que la cuenta de Garmin tenga acceso a la app,
+- que el entorno virtual esté activo,
+- que `garminconnect` esté instalado correctamente.
+
+### Error: no hay modelo de Ollama disponible
+
+Ejecuta:
+
+```powershell
+ollama pull llama3.2
+```
+
+Y luego:
+
+```powershell
+ollama serve
+```
+
+### El programa no encuentra el módulo `utils`
+
+Asegúrate de ejecutar el script desde la raíz del proyecto y no desde otra carpeta. Por ejemplo:
+
+```powershell
+cd C:\Users\tu_usuario\Documents\Machine Learning\00.Proyecto_Garmin
+python test.py
+```
+
+## 12. Flujo recomendado de uso
+
+Para una experiencia limpia, sigue este orden:
+
+```powershell
+# 1. Entrar al proyecto
+cd C:\Users\tu_usuario\Documents\Machine Learning\00.Proyecto_Garmin
+
+# 2. Activar el entorno virtual
+.\.venv\Scripts\Activate.ps1
+
+# 3. Instalar dependencias
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Crear .env con tus credenciales
+notepad .env
+
+# 5. Verificar Ollama
+ollama pull llama3.2
+ollama list
+
+# 6. Ejecutar
+python test.py
+```
+
+## 13. Recomendaciones importantes
+
+- Mantén tu archivo `.env` local y no lo compartas.
+- Si cambias de modelo de Ollama, ajusta el parámetro `modelo` en `test.py`.
+- Si no quieres usar Ollama, tendrías que adaptar el código para usar otra API o proveedor de IA.
+- Este proyecto está pensado para análisis personal y entrenamiento deportivo, no para automatizar tareas de terceros ni extraer datos de personas sin su consentimiento.
+
+## 14. Resumen rápido
+
+Si quieres arrancar en 30 segundos:
+
+```powershell
+cd C:\Users\tu_usuario\Documents\Machine Learning\00.Proyecto_Garmin
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+notepad .env
+python test.py
+```
+
+Y en `.env`:
 
 ```dotenv
 GARMIN_EMAIL=tu_correo
 GARMIN_PASSWORD=tu_contrasena
 ```
 
-No se deben escribir las credenciales directamente en el codigo ni subir `.env` a Git.
+## 15. Nota final
 
-Para leerlas:
+Este proyecto combina tres piezas principales:
 
-```python
-import os
-from dotenv import load_dotenv
+- Garmin Connect: extracción de datos reales,
+- Python: limpieza y preparación de datos,
+- Ollama: análisis inteligente del entrenamiento.
 
-load_dotenv()
+Si sigues estos pasos, cualquier persona con conocimientos básicos de Python puede arrancar el proyecto desde cero y ejecutarlo correctamente en su equipo.
 
-email = os.getenv("GARMIN_EMAIL")
-password = os.getenv("GARMIN_PASSWORD")
-```
-
-### Idea importante
-
-`load_dotenv()` carga los valores en las variables de entorno del proceso. No crea automaticamente una variable Python llamada `GARMIN_PASSWORD`.
-
-Por eso esto produce un error:
-
-```python
-print(GARMIN_PASSWORD)
-```
-
-La forma correcta es utilizar `os.getenv`:
-
-```python
-print(os.getenv("GARMIN_PASSWORD"))
-```
-
-En un programa real no conviene imprimir una contrasena. Para comprobar si se ha cargado, muestra solo un indicador:
-
-```python
-print("Contrasena cargada:", os.getenv("GARMIN_PASSWORD") is not None)
-```
-
-## 4. Crear el cliente y autenticarse
-
-La clase principal es `Garmin`:
-
-```python
-from garminconnect import Garmin
-
-client = Garmin(email, password)
-client.login("~/.garminconnect")
-```
-
-El objeto `client` representa la conexion con Garmin Connect y se pasa a las funciones que necesitan consultar datos.
-
-En la version actual, `utils/garmin_utils.py` contiene `garmin_client()`. Esta funcion crea el cliente, intenta iniciar sesion y devuelve el objeto conectado:
-
-```python
-from utils.garmin_utils import garmin_client
-
-client = garmin_client()
-if client:
-    print("La conexion esta lista para consultar datos")
-```
-
-Si el inicio de sesion falla, la funcion imprime el error y devuelve `False`. Centralizar la autenticacion permite reutilizar la misma sesion.
-
-## 5. Consultar actividades por fechas
-
-La biblioteca permite consultar actividades mediante `get_activities_by_date(start, end)`. Las fechas se envian como texto con formato ISO: `YYYY-MM-DD`.
-
-Ejemplo para el mes actual:
-
-```python
-from datetime import date
-
-today = date.today().isoformat()
-first_day = date.today().replace(day=1).isoformat()
-monthly_activities = client.get_activities_by_date(first_day, today)
-```
-
-En `utils/garmin_utils.py`, `get_weekly_activities(client)` recibe un cliente ya autenticado y devuelve las actividades de los ultimos siete dias:
-
-```python
-from utils.garmin_utils import get_weekly_activities
-
-weekly_activities = get_weekly_activities(client)
-print("Actividades de la semana:", len(weekly_activities))
-```
-
-El resultado de `get_activities_by_date` es una lista de diccionarios. Para estudiarlo sin perder contexto, es preferible imprimir un resumen con etiquetas y totales:
-
-```python
-print("\n=== Actividades de los ultimos 7 dias ===")
-print(f"Total de actividades: {len(weekly_activities)}")
-print(weekly_activities)
-```
-
-Pasar `client` como argumento evita autenticar una vez por cada consulta.
-
-## 6. Consultar y preparar la frecuencia cardiaca
-
-En `utils/garmin_utils.py`, `get_heart_rate_data(client)` hace la consulta de hoy y devuelve directamente la lista `heartRateValues`:
-
-```python
-from utils.garmin_utils import get_heart_rate_data
-
-readings = get_heart_rate_data(client)
-```
-
-La respuesta original de Garmin contiene, entre otros datos, `heartRateValues`. Cada lectura se representa como un par:
-
-```python
-[timestamp, heart_rate]
-```
-
-Algunas respuestas pueden contener valores `None`, por lo que hay que filtrarlos antes de convertirlos o representarlos:
-
-```python
-for timestamp, heart_rate in readings:
-    if timestamp is None or heart_rate is None:
-        continue
-    print(timestamp, heart_rate)
-```
-
-## 7. Convertir timestamps y dibujar la grafica
-
-La funcion `plot_today_heart_rates()` de `utils/visuals.py` reune todo el proceso:
-
-1. Calcula la fecha de hoy.
-2. Pide los datos a Garmin.
-3. Extrae `heartRateValues` mediante `get_heart_rate_data`.
-4. Descarta lecturas incompletas.
-5. Convierte el timestamp a fecha y hora.
-6. Dibuja las pulsaciones con Matplotlib.
-7. Devuelve la figura.
-
-Los timestamps pueden llegar en segundos o en milisegundos. La conversion para milisegundos es:
-
-```python
-if timestamp > 10**12:
-    timestamp /= 1000
-```
-
-Uso:
-
-```python
-import matplotlib.pyplot as plt
-from utils.visuals import plot_today_heart_rates
-
-heart_rate_figure = plot_today_heart_rates()
-plt.show()
-```
-
-La figura tambien se puede guardar:
-
-```python
-heart_rate_figure.savefig("frecuencia_cardiaca_hoy.png")
-```
-
-La etiqueta `bpm` significa *beats per minute*, es decir, pulsaciones por minuto.
-
-## 8. Filtrar y transformar carreras
-
-`utils/data_merger.py` convierte la respuesta completa de Garmin en una estructura mas pequena y facil de analizar.
-
-### Filtrar carreras
-
-`parse_weekly_runs(weekly_runs)` recorre las actividades y conserva aquellas cuyo `activityType.typeKey` contiene `running`. Esto incluye carreras normales y carreras en cinta (`treadmill_running`).
-
-```python
-run_type = run.get("activityType", {}).get("typeKey", "")
-if "running" in run_type:
-    # La actividad se transforma en un diccionario resumido
-```
-
-El uso de `.get()` evita errores cuando falta una clave:
-
-```python
-name = run.get("activityName", "Carrera")
-distance = run.get("distance", 0)
-average_heart_rate = run.get("averageHR", 0)
-```
-
-### Estructura resumida de una carrera
-
-Cada carrera filtrada conserva estas categorias:
-
-- Identidad: `name`, `date`.
-- Volumen: `distance_meters`, `duration_seconds`.
-- Intensidad: `average_heart_rate`, `training_load`.
-- Dinamica: `cadence`, `stride_length_cm`, `vertical_oscillation_cm`, `vertical_ratio`.
-- Zonas cardiacas: `zone_1`, `zone_2`, `zone_3`, `zone_4`, `zone_5`.
-
-`parse_weekly_activities(client)` combina la consulta semanal con el filtrado y devuelve un diccionario bajo la clave `weekly_runs`:
-
-```python
-{
-    "weekly_runs": [
-        {
-            "name": "Carrera",
-            "distance_meters": 5000,
-            "average_heart_rate": 145
-        }
-    ]
-}
-```
-
-Ejemplo de uso:
-
-```python
-from utils.data_merger import parse_weekly_activities
-
-parsed_data = parse_weekly_activities(client)
-runs = parsed_data["weekly_runs"]
-print("Carreras encontradas:", len(runs))
-```
-
-## 9. Flujo recomendado del programa
-
-El flujo recomendado es autenticar una vez, reutilizar `client`, obtener los datos originales, transformarlos y finalmente visualizarlos:
-
-```python
-import matplotlib.pyplot as plt
-
-from utils.data_merger import parse_weekly_activities
-from utils.garmin_utils import garmin_client, get_weekly_activities
-from utils.visuals import plot_today_heart_rates
-
-client = garmin_client()
-if client:
-    weekly_activities = get_weekly_activities(client)
-    parsed_data = parse_weekly_activities(client)
-    heart_rate_figure = plot_today_heart_rates()
-    plt.show()
-```
-
-## 10. Errores habituales y puntos pendientes
-
-### `NameError: name 'GARMIN_PASSWORD' is not defined`
-
-Significa que se ha usado el nombre de una variable de entorno como si fuera una variable Python. Solucion:
-
-```python
-password = os.getenv("GARMIN_PASSWORD")
-```
-
-### El valor es `None`
-
-Comprueba que:
-
-- El archivo se llama exactamente `.env`.
-- Esta en la carpeta desde la que se ejecuta el programa.
-- La clave coincide exactamente con `GARMIN_PASSWORD` o `GARMIN_EMAIL`.
-- No hay espacios innecesarios alrededor del nombre.
-- Se ha ejecutado `load_dotenv()` antes de llamar a `os.getenv`.
-
-### No aparecen puntos en la grafica
-
-Puede que Garmin no haya devuelto lecturas para la fecha consultada. La funcion maneja este caso mostrando un mensaje dentro de la grafica.
-
-### Import duplicado en `test.py`
-
-No se debe importar `get_weekly_activities` desde dos sitios. La importacion recomendada es:
-
-```python
-from utils.garmin_utils import get_weekly_activities
-from utils.data_merger import parse_weekly_activities
-```
-
-`data_merger.py` utiliza la funcion de consulta, pero no debe reemplazarla con otro nombre.
-
-### Import de la grafica
-
-`utils/visuals.py` debe importar el modulo desde el paquete del proyecto:
-
-```python
-from utils.garmin_utils import get_heart_rate_data
-```
-
-Asi se evita depender de un `garmin_utils.py` situado en la raiz.
-
-### No se debe compartir informacion sensible
-
-Nunca publiques el contenido de `.env`, contrasenas, tokens ni archivos de sesion de Garmin. Si una credencial se expone, debe cambiarse cuanto antes.
-
-## 11. Ejercicios de estudio
-
-1. Modifica la grafica para mostrar una linea horizontal con la frecuencia cardiaca en reposo.
-2. Anade una funcion que devuelva el valor maximo y minimo de pulsaciones del dia.
-3. Guarda automaticamente la grafica con la fecha en el nombre del archivo.
-4. Cambia la consulta mensual para que reciba una fecha inicial y una fecha final como argumentos.
-5. Reutiliza un unico objeto `Garmin` en todas las consultas.
-6. Anade comprobaciones que indiquen claramente si falta `GARMIN_EMAIL` o `GARMIN_PASSWORD`.
-7. Calcula la distancia total y el tiempo total de las carreras de la semana.
-8. Convierte `distance_meters` a kilometros y `duration_seconds` a minutos.
-9. Crea una grafica del ritmo medio de cada carrera.
-10. Corrige los imports del paquete `utils` y prueba el flujo completo desde `test.py`.
-
-## 12. Resumen
-
-Los conceptos principales aprendidos son:
-
-- Las variables de `.env` se leen con `os.getenv` despues de ejecutar `load_dotenv()`.
-- `Garmin(email, password)` crea el cliente.
-- `login()` autentica la sesion.
-- Las consultas por fecha utilizan textos con formato `YYYY-MM-DD`.
-- Las actividades se consultan con `get_activities_by_date`.
-- `garmin_client()` centraliza la creacion y autenticacion del cliente.
 - `get_weekly_activities(client)` reutiliza una sesion existente.
 - `parse_weekly_runs` filtra carreras mediante `activityType.typeKey`.
 - `parse_weekly_activities` devuelve una estructura resumida bajo la clave `weekly_runs`.
