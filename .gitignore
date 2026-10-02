@@ -10,3 +10,7 @@ env/
 # Archivos cacheados de Python
 __pycache__/
 *.pyc
+
+# Node / Next.js
+node_modules/
+.next/
