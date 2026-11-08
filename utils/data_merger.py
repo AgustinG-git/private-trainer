@@ -1,14 +1,16 @@
+from datetime import date
+
 from dotenv import load_dotenv
 from utils.garmin_utils import get_weekly_activities
 load_dotenv()
 
 
-def parse_weekly_activities(client):
+def parse_weekly_activities(client, end: date):
     """
-    Retrieve the user's activities for the last 7 days.
+    Retrieve the user's activities for the 7 days ending on `end`.
     """
 
-    weekly_activities = get_weekly_activities(client)
+    weekly_activities = get_weekly_activities(client, end)
     parsed_weekly_runs = parse_weekly_runs(weekly_activities)
 
     parsed_weekly_activities = {}

@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 # Importas tus funciones existentes
@@ -23,7 +25,7 @@ async def obtener_plan_semanal():
         client = garmin_client()
         
         # 2. Extraer datos
-        weekly_activities = parse_weekly_activities(client)
+        weekly_activities = parse_weekly_activities(client, date.today())
         
         # 3. Generar recomendación con Llama 3.2
         recomendacion = chat_Ollama(weekly_activities, modelo="llama3.2")
@@ -38,6 +40,6 @@ async def obtener_plan_semanal():
 @app.get("/api/metricas/frecuencia-cardiaca")
 async def obtener_pulso_hoy():
     client = garmin_client()
-    hr_data = get_heart_rate_data(client)
+    hr_data = get_heart_rate_data(client, date.today())
     # Devuelves el JSON puro, sin pasar por matplotlib
     return hr_data

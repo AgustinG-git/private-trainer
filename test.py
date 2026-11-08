@@ -1,3 +1,5 @@
+from datetime import date
+
 from dotenv import load_dotenv
 from utils.garmin_utils import garmin_client
 from utils.data_merger import parse_weekly_activities
@@ -6,7 +8,7 @@ load_dotenv()
 
 client = garmin_client()
 
-weekly_activities = parse_weekly_activities(client)
+weekly_activities = parse_weekly_activities(client, date.today())
 
 print(chat_Ollama(f"""
 Actúa como un entrenador de atletismo y fisiólogo deportivo de alto rendimiento.
