@@ -1,30 +1,72 @@
 from collections.abc import Callable
 from datetime import date, timedelta
 import os
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
-from garminconnect import Garmin, GarminConnectConnectionError
+from garminconnect import (
+    Garmin,
+    GarminConnectAuthenticationError,
+    GarminConnectConnectionError,
+    GarminConnectTooManyRequestsError,
+)
 
 load_dotenv()
 
-def garmin_client():
+TOKENSTORE = Path("~/.garminconnect").expanduser()
+TOKEN_FILE = TOKENSTORE / "garmin_tokens.json"
+INVALID_TOKEN_FILE = TOKENSTORE / "garmin_tokens.invalid.json"
+
+class GarminLoginError(Exception):
+    """Login to Garmin failed; the message says why."""
+
+class GarminRateLimitError(GarminLoginError):
+    """Garmin is rate limiting this IP (429). Temporary."""
+
+def garmin_client() -> Garmin:
     """
-    Create and return a Garmin client using the provided credentials.
+    Return a logged-in Garmin client.
+
+    Translates the library errors into GarminLoginError so
+    callers only need to handle one exception type.
     """
 
-    garmin_password = os.getenv("GARMIN_PASSWORD")
-    garmin_username = os.getenv("GARMIN_EMAIL")
-
-    client = Garmin(garmin_username, garmin_password)
     try:
-        client.login("~/.garminconnect")
-        print("Connection successful.")
-        return client
-    
-    except Exception as e:
-        print(f"Connection failed: {e}")
-        return False
+        return _connect()
+    except GarminConnectTooManyRequestsError as e:
+        raise GarminRateLimitError(
+            "Garmin está limitando tu IP (429). Espera unos minutos."
+        ) from e
+    except GarminConnectAuthenticationError as e:
+        raise GarminLoginError(f"Garmin rechazó las credenciales: {e}") from e
+    except GarminConnectConnectionError as e:
+        raise GarminLoginError(f"No se pudo conectar con Garmin: {e}") from e
+
+def _connect() -> Garmin:
+    """
+    Log in with saved tokens; fall back to email/password once.
+    """
+
+    if TOKEN_FILE.exists():
+        try:
+            client = Garmin()  # sin credenciales: solo tokens
+            client.login(str(TOKENSTORE))
+            return client
+        except GarminConnectAuthenticationError:
+            print("Tokens de Garmin caducados: login con contraseña.")
+            TOKEN_FILE.replace(INVALID_TOKEN_FILE)  # apartar, no borrar
+
+    email = os.getenv("GARMIN_EMAIL")
+    password = os.getenv("GARMIN_PASSWORD")
+    if not email or not password:
+        raise GarminLoginError(
+            "Define GARMIN_EMAIL y GARMIN_PASSWORD en el .env"
+        )
+
+    client = Garmin(email, password)
+    client.login(str(TOKENSTORE))  # sin tokens: login y los guarda
+    return client
 
 def get_weekly_activities(client: Garmin, end: date) -> list[dict]:
     """

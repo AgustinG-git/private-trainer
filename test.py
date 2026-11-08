@@ -1,12 +1,16 @@
 from datetime import date
+import sys
 
 from dotenv import load_dotenv
-from utils.garmin_utils import garmin_client
+from utils.garmin_utils import GarminLoginError, garmin_client
 from utils.data_merger import parse_weekly_activities
 from agents.ollama_agents import chat_Ollama
 load_dotenv()
 
-client = garmin_client()
+try:
+    client = garmin_client()
+except GarminLoginError as e:
+    sys.exit(f"Error: {e}")  # mensaje y código 1
 
 weekly_activities = parse_weekly_activities(client, date.today())
 
